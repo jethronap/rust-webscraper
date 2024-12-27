@@ -1,12 +1,17 @@
+mod config;
+
+use config::load_config;
 use anyhow::Result;
 use scraper::{Html, Selector};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let url = "https://www.rust-lang.org";
+    let config = load_config()?;
+    println!("Target URL: {}", config.url);
+    println!("Request Timeout: {} seconds", config.timeout);
 
-    let response = reqwest::get(url).await?.text().await?;
-    println!("Fetched document from {}", url);
+    let response = reqwest::get(config.url).await?.text().await?;
+    // println!("Fetched document from {}", config.url.to_string());
 
     let document = Html::parse_document(&response);
 
