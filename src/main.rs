@@ -1,8 +1,10 @@
 mod config;
 mod cli_args;
+mod data;
 
 use config::load_config;
 use cli_args::CliArgs;
+use data::{ScrapedLink, save_to_json};
 use clap::Parser;
 use anyhow::Result;
 use scraper::{Html, Selector};
@@ -26,11 +28,17 @@ async fn main() -> Result<()> {
 
     let selector = Selector::parse("a").unwrap();  // Select all anchor tags
 
+    let mut scraped_links: Vec<ScrapedLink> = Vec::new();
+
     for element in document.select(&selector) {
         if let Some(link) = element.value().attr("href") {
             println!("Found link: {}", link);
+            scraped_links.push(ScrapedLink { url: link.to_string() });
         }
     }
+
+    // Save scraped data to JSON
+    save_to_json(&scraped_links, "scraped_links.json")?;
 
     Ok(())
 
