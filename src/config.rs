@@ -2,10 +2,10 @@ use serde::Deserialize;
 use std::fs;
 use anyhow::Result;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Config {
-    pub url: String,
-    pub timeout: u64,
+    pub url: Option<String>,
+    pub timeout: Option<u64>,
 }
 
 pub fn load_config() -> Result<Config> {

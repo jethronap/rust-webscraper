@@ -28,10 +28,17 @@ This is a simple webscraper written in Rust. It allows you to fetch and parse HT
 
 ## Usage
 
-Run the webscraper with a target URL:
+Run the webscraper with a target URL and designated timeout:
 ```sh
-cargo run -- https://example.com
+cargo run -- --url https://example.com --timeout 15
 ```
+
+Run the websraper without cli arguments:
+```sh
+cargo run
+```
+
+The scraper will use the default values provided in the configuration file.
 
 ## License
 

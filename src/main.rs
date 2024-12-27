@@ -1,17 +1,26 @@
 mod config;
+mod cli_args;
 
 use config::load_config;
+use cli_args::CliArgs;
+use clap::Parser;
 use anyhow::Result;
 use scraper::{Html, Selector};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = load_config()?;
-    println!("Target URL: {}", config.url);
-    println!("Request Timeout: {} seconds", config.timeout);
+    let cli_args = CliArgs::parse();
 
-    let response = reqwest::get(config.url).await?.text().await?;
-    // println!("Fetched document from {}", config.url.to_string());
+
+    let url = cli_args.url.or(config.url).expect("No URL provided");
+    let timeout = cli_args.timeout.or(config.timeout).expect("No timeout provided");
+
+    println!("Target URL: {}", url);
+    println!("Request Timeout: {} seconds", timeout);
+
+    let response = reqwest::get(&url).await?.text().await?;
+    println!("Fetched document from {}", url);
 
     let document = Html::parse_document(&response);
 
