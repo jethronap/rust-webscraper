@@ -42,6 +42,13 @@ The scraper will use the default values provided in the configuration file.
 
 Currently, the scraper saves extracted data to a `.json` file inside a `backup` folder at the root of the project.
 
+## Testing
+Use the following command to run the unit tests
+```sh
+cargo test
+```
+
+
 ## License
 
 This project is licensed under the MIT License.
