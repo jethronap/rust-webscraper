@@ -11,7 +11,7 @@ use scraper::{Html, Selector};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = load_config()?;
+    let config = load_config("config.toml")?;
     let cli_args = CliArgs::parse();
 
 
