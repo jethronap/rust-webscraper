@@ -28,26 +28,38 @@ pub fn save_to_json<T: Serialize>(data: &T, file_path: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::fs;
-    use serde::Serialize;
+    use crate::models::ExtractedElement;
 
-    #[derive(Serialize)]
-    struct TestData {
-        key: String,
-    }
+    use super::*;
+    use std::{collections::HashMap, fs};
 
     #[test]
     fn test_save_to_json() {
         // Create test data
-        let data = vec![TestData { key: "value".to_string() }];
+        let mut attributes = HashMap::new();
+        attributes.insert("id".to_string(), "paragraph1".to_string());
+        attributes.insert("class".to_string(), "example".to_string());
+        
+        let elements = vec![ExtractedElement {
+            tag: "p".to_string(),
+            content: "This is a paragraph.".to_string(),
+            attributes: Some(attributes),
+        },
+        ExtractedElement {
+            tag: "h1".to_string(),
+            content: "Title".to_string(),
+            attributes: None,
+        }];
 
         // Save data to JSON
-        save_to_json(&data, "test_output.json").unwrap();
+        save_to_json(&elements, "test_output.json").unwrap();
 
         // Verify file exists and contains the expected data
         let content = fs::read_to_string("backup/test_output.json").unwrap();
-        assert!(content.contains("\"key\": \"value\""));
+        assert!(content.contains("\"tag\": \"p\""));
+        assert!(content.contains("\"content\": \"This is a paragraph.\""));
+        assert!(content.contains("\"id\": \"paragraph1\""));
+        assert!(content.contains("\"class\": \"example\""));
 
         // Clean up
         fs::remove_file("backup/test_output.json").unwrap();
