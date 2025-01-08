@@ -2,10 +2,6 @@ use serde::Serialize;
 use std::{fs, path::Path};
 use anyhow::Result;
 
-#[derive(Serialize)]
-pub struct ScrapedLink {
-    pub url: String,
-}
 
 /// Serialize and save data to a JSON file inside the `backup` folder
 pub fn save_to_json<T: Serialize>(data: &T, file_path: &str) -> Result<()> {

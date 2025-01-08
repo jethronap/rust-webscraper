@@ -11,4 +11,8 @@ pub struct CliArgs {
     // The request timeout
     #[arg(short, long)]
     pub timeout: Option<u64>,
+
+    // The CSS selector to extract elements
+    #[arg(short, long)]
+    pub selector: Option<String>,
 }
