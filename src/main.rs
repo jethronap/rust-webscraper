@@ -1,3 +1,4 @@
+mod downloader;
 mod config;
 mod cli_args;
 mod data;
@@ -12,6 +13,8 @@ use clap::Parser;
 use anyhow::Result;
 use models::ExtractedElement;
 use scraper::{Html, Selector};
+use downloader::{collect_pdf_links, download_pdfs};
+
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -63,6 +66,9 @@ async fn main() -> Result<()> {
 
     // Save scraped data to JSON
     save_to_json(&extracted_elements, "extracted_elements.json")?;
+
+    let pdf_urls= collect_pdf_links("backup/extracted_elements.json", &url)?;
+    download_pdfs(&pdf_urls, "backup") .await?;   // keep PDFs inside the same folder
 
     Ok(())
 
