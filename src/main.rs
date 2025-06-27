@@ -18,12 +18,20 @@ use downloader::{collect_pdf_links, download_pdfs};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = load_config("config.toml")?;
+    let cfg = load_config("config.toml")?;
+    let json_path = "backup/extracted_elements.json";
+
     let cli_args = CliArgs::parse();
 
 
-    let url = cli_args.url.or(config.url).expect("No URL provided");
-    let timeout = cli_args.timeout.or(config.timeout).expect("No timeout provided");
+    let url = cli_args
+    .url
+    .as_deref()
+    .or(cfg.url.as_deref())
+    .expect("No URL provided")
+    .to_owned();           // owned String
+
+    let timeout = cli_args.timeout.or(cfg.timeout).expect("No timeout provided");
 
     println!("Target URL: {}", url);
     println!("Request Timeout: {} seconds", timeout);
@@ -33,7 +41,12 @@ async fn main() -> Result<()> {
 
     let document = Html::parse_document(&response);
 
-    let selector_str = cli_args.selector.or(config.selector).expect("No selector provided");
+    let selector_str = cli_args
+    .selector
+    .as_deref()                       // Option<&str>
+    .or(cfg.selector.as_deref())
+    .expect("No selector provided")
+    .to_owned();                      // String if you need ownership
 
     println!("Using selector: {}", selector_str);
 
@@ -67,7 +80,7 @@ async fn main() -> Result<()> {
     // Save scraped data to JSON
     save_to_json(&extracted_elements, "extracted_elements.json")?;
 
-    let pdf_urls= collect_pdf_links("backup/extracted_elements.json", &url)?;
+    let pdf_urls= collect_pdf_links(json_path, &cfg)?;
     download_pdfs(&pdf_urls, "backup") .await?;   // keep PDFs inside the same folder
 
     Ok(())

@@ -7,6 +7,7 @@ pub struct Config {
     pub url: Option<String>,
     pub timeout: Option<u64>,
     pub selector: Option<String>,
+    pub pdf_selector: Option<String>,
 }
 
 pub fn load_config(file_path: &str) -> Result<Config> {

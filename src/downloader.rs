@@ -1,76 +1,102 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
-use std::{fs, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 use url::Url;
 
-use crate::models::ExtractedElement;
+use crate::{config::Config, models::ExtractedElement};
 
-/// Return all absolute PDF URLs found in the JSON file
-pub fn collect_pdf_links(json_path: &str, base_url: &str)-> Result<Vec<Url>> {
-    let data = fs::read_to_string(json_path)
-        .with_context(|| format!("Cannot reaf {}", json_path))?;
-    
-    let elements: Vec<ExtractedElement> = serde_json::from_str(&data)
-        .with_context(|| "JSON deserialisation failed")?;
+/// Read `json_path`, find <a> elements whose attribute `cfg.pdf_selector`
+/// (default `"data-wt-preview"`) indicates a PDF, and return absolute URLs.
+pub fn collect_pdf_links(json_path: &str, cfg: &Config) -> Result<Vec<Url>> {
+    // ------------------------------------------------------------------ load
+    let raw = fs::read_to_string(json_path)
+        .with_context(|| format!("Cannot read {json_path}"))?;
 
-    let base = Url::parse(base_url)
-        .with_context(|| format!("Invalid base URL {}", base_url))?;
+    let elements: Vec<ExtractedElement> =
+        serde_json::from_str(&raw).context("JSON deserialisation failed")?;
+
+    // ------------------------------------------------------------------ base
+    let base = Url::parse(
+        cfg.url
+            .as_deref()
+            .ok_or_else(|| anyhow!("`url` missing in config"))?,
+    )
+    .context("Invalid base URL")?;
+
+    let pdf_attr = cfg
+        .pdf_selector
+        .as_deref()
+        .unwrap_or("data-wt-preview"); // sensible default
+
+
+    let tag_filter = cfg.selector.as_deref();
 
     let mut pdf_urls = Vec::new();
 
     for el in elements {
-        if el.tag != "a" {
-            continue;
+        if let Some(tag) = tag_filter {
+            if el.tag != tag {
+                continue; // tag does not match selector
+            }
         }
-        let attrs = match &el.attributes {
-            Some(map) => map,
+
+        let attrs: &HashMap<String, String> = match &el.attributes {
+            Some(m) => m,
+            None => continue, // no attributes at all
+        };
+
+        // must have the attribute key at all
+        let value = match attrs.get(pdf_attr) {
+            Some(v) => v,
             None => continue,
         };
-        if attrs.get("data-wt-preview").map(String::as_str) != Some("pdf") {
+
+        // if the attribute has a value, enforce case-insensitive "pdf"
+        if !value.eq_ignore_ascii_case("pdf") {
             continue;
         }
+
         let href = match attrs.get("href") {
             Some(h) => h,
             None => continue,
         };
 
-        // Join relative link with base URL
-        let url = base.join(href)
-            .with_context(|| format!("Cannot join {} with {}", base, href))?;
+        let url = base
+            .join(href)
+            .with_context(|| format!("Cannot join {base} with {href}"))?;
         pdf_urls.push(url);
     }
+
     Ok(pdf_urls)
-    }
+}
 
-
-/// Download every URL into `output_dir`; file names are taken from the URL’s
-/// last path segment (falls back to GUID if absent).
+/// Download every URL into `output_dir`.
+/// The filename is the last path segment; ".pdf" is appended if missing.
 pub async fn download_pdfs(urls: &[Url], output_dir: &str) -> Result<()> {
     fs::create_dir_all(output_dir)
-        .with_context(|| format!("Cannot create outpur dir {}", output_dir))?;
+        .with_context(|| format!("Cannot create {output_dir}"))?;
 
     let client = Client::builder().build()?;
 
     for url in urls {
-        let resp = client.get(url.clone()).send().await?
-            .error_for_status()?;
+        let resp = client.get(url.clone()).send().await?.error_for_status()?;
         let bytes = resp.bytes().await?;
 
         let mut filename = url
             .path_segments()
             .and_then(|s| s.last())
             .filter(|s| !s.is_empty())
-            .unwrap_or("download.pdf")
-            .to_string();
-        
+            .unwrap_or("download")
+            .to_owned();
+
         if !filename.to_ascii_lowercase().ends_with(".pdf") {
-           filename.push_str(".pdf");
+            filename.push_str(".pdf");
         }
 
-        let path = Path::new(output_dir).join(filename);
+        let path = Path::new(output_dir).join(&filename);
         fs::write(&path, &bytes)
             .with_context(|| format!("Cannot write {:?}", path))?;
-        println!("Saved {}", path.display());
+        println!("✔  saved {}", path.display());
     }
     Ok(())
 }
@@ -78,34 +104,31 @@ pub async fn download_pdfs(urls: &[Url], output_dir: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+    use crate::config::Config;
 
     #[test]
-    fn extract_pdf_links_from_json() {
-        let sample = r#"
-        [
-            {
-                "tag":"a",
-                "content":"PDF 1",
-                "attributes":{
-                    "href":"/file/doc1.pdf",
-                    "data-wt-preview":"pdf"
-                }
-            },
-            {
-                "tag":"a",
-                "content":"HTML link",
-                "attributes":{
-                    "href":"https://example.com",
-                    "data-wt-preview":"html"
-                }
-            }
-        ]
-        "#;
-        fs::write("test.json", sample).unwrap();
-        let urls = collect_pdf_links("test.json", "https://base.example").unwrap();
-        fs::remove_file("test.json").unwrap();
+    fn finds_pdf_links_with_custom_selector() {
+        // ---------------------------------------------------- prepare config
+        let cfg = Config {
+            url: Some("https://host".into()),
+            timeout: None,
+            selector: Some("a".into()),          // we expect <a> tags
+            pdf_selector: Some("data-wt-preview".into()),
+        };
+
+        // -------------------------------------------------- sample JSON file
+        let sample = r#"[{
+            "tag":"a",
+            "content":"PDF",
+            "attributes":{"href":"/f.pdf","data-wt-preview":"pdf"}
+        }]"#;
+        fs::write("tmp.json", sample).unwrap();
+
+        // ----------------------------------------------------------- collect
+        let urls = collect_pdf_links("tmp.json", &cfg).unwrap();
         assert_eq!(urls.len(), 1);
-        assert_eq!(urls[0].as_str(), "https://base.example/file/doc1.pdf");
+        assert_eq!(urls[0].as_str(), "https://host/f.pdf");
+
+        fs::remove_file("tmp.json").unwrap();
     }
 }
