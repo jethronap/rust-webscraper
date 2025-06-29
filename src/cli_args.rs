@@ -18,4 +18,8 @@ pub struct CliArgs {
 
     #[arg(long)]
     pub force_scrape: bool,
+    
+    /// Process extracted PDF texts into structured summary
+    #[arg(long)]
+    pub process_pdfs: bool,
 }

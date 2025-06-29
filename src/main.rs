@@ -4,6 +4,8 @@ mod cli_args;
 mod data;
 mod models;
 mod pdf_parser;
+mod pdf_processor;
+mod pdf_generator;
 
 use std::collections::HashMap;
 
@@ -17,6 +19,9 @@ use models::ExtractedElement;
 use scraper::{Html, Selector};
 use downloader::{collect_pdf_links, download_pdfs};
 use pdf_parser::parse_and_save;
+use pdf_processor::process_pdf_texts;
+use pdf_generator::{generate_structured_summary, generate_json_summary};
+use models::PdfText;
 
 
 #[tokio::main]
@@ -93,8 +98,45 @@ async fn main() -> Result<()> {
 
     parse_and_save("backup", std::path::Path::new("backup/pdf_text.json"))?;
 
+    // Check if we should process PDFs into structured format
+    if cli_args.process_pdfs {
+        process_pdfs_to_summary()?;
+    }
+
     Ok(())
 
+}
+
+/// Process existing PDF text data into structured summaries
+fn process_pdfs_to_summary() -> Result<()> {
+    let pdf_text_path = "backup/pdf_text.json";
+    
+    if !Path::new(pdf_text_path).exists() {
+        println!("No PDF text file found at {}", pdf_text_path);
+        return Ok(());
+    }
+    
+    println!("Processing PDF texts into structured summary...");
+    
+    // Load the existing PDF text data
+    let file = std::fs::File::open(pdf_text_path)?;
+    let pdf_texts: Vec<PdfText> = serde_json::from_reader(file)?;
+    
+    // Process into structured format
+    let summary = process_pdf_texts(&pdf_texts)?;
+    
+    println!("Extracted {} projects from {} PDF files", 
+             summary.total_projects, pdf_texts.len());
+    
+    // Generate structured text summary
+    generate_structured_summary("backup/edf_summary.md", &summary)?;
+    println!("Generated structured summary: backup/edf_summary.md");
+    
+    // Generate JSON for querying
+    generate_json_summary("backup/edf_summary.json", &summary)?;
+    println!("Generated JSON summary: backup/edf_summary.json");
+    
+    Ok(())
 }
 
 #[cfg(test)]
