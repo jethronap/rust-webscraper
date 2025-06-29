@@ -79,9 +79,7 @@ pub async fn download_pdfs(urls: &[Url], output_dir: &str) -> Result<()> {
     let client = Client::builder().build()?;
 
     for url in urls {
-        let resp = client.get(url.clone()).send().await?.error_for_status()?;
-        let bytes = resp.bytes().await?;
-
+        // --- derive target filename ----------------------------------------
         let mut filename = url
             .path_segments()
             .and_then(|s| s.last())
@@ -94,9 +92,24 @@ pub async fn download_pdfs(urls: &[Url], output_dir: &str) -> Result<()> {
         }
 
         let path = Path::new(output_dir).join(&filename);
+        if path.exists() {
+            println!("Skip {}, already downloaded", path.display());
+            continue; // idempotent: do nothing
+        }
+
+        // --- perform download ----------------------------------------------
+        println!("Downloading {}", filename);
+        let bytes = client
+            .get(url.clone())
+            .send()
+            .await?
+            .error_for_status()?
+            .bytes()
+            .await?;
+
         fs::write(&path, &bytes)
             .with_context(|| format!("Cannot write {:?}", path))?;
-        println!("✔  saved {}", path.display());
+        println!("Saved {}", path.display());
     }
     Ok(())
 }

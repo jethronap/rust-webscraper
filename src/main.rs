@@ -48,13 +48,13 @@ async fn main() -> Result<()> {
     println!("Target URL: {}", url);
     println!("Request Timeout: {} seconds", timeout);
     println!("Using selector: {}", selector_str);
-    println!("Fetched document from {}", url);
 
     if !Path::new(json_path).exists() {
         println!("⏳ scraping (no cache yet) …");
 
         let response = reqwest::get(&url).await?.text().await?;
         let document = Html::parse_document(&response);
+        println!("Fetched document from {}", url);
         let selector = Selector::parse(&selector_str).expect("Invalid CSS selector");
 
         let mut extracted_elements: Vec<ExtractedElement> = Vec::new();
