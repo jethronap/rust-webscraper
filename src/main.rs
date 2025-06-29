@@ -3,6 +3,7 @@ mod config;
 mod cli_args;
 mod data;
 mod models;
+mod pdf_parser;
 
 use std::collections::HashMap;
 
@@ -14,6 +15,7 @@ use anyhow::Result;
 use models::ExtractedElement;
 use scraper::{Html, Selector};
 use downloader::{collect_pdf_links, download_pdfs};
+use pdf_parser::parse_and_save;
 
 
 #[tokio::main]
@@ -82,6 +84,8 @@ async fn main() -> Result<()> {
 
     let pdf_urls= collect_pdf_links(json_path, &cfg)?;
     download_pdfs(&pdf_urls, "backup") .await?;   // keep PDFs inside the same folder
+
+    parse_and_save("backup", std::path::Path::new("backup/pdf_text.json"))?;
 
     Ok(())
 
