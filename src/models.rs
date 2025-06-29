@@ -8,8 +8,8 @@ pub struct ExtractedElement {
     pub attributes: Option<HashMap<String, String>>, // use a map or attributes
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PdfText {
     pub file: String,
-    pub pages: Vec<String>,   // one string per page
+    pub text: String,   // one string per page
 }
