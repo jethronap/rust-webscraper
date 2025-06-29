@@ -15,4 +15,7 @@ pub struct CliArgs {
     // The CSS selector to extract elements
     #[arg(short, long)]
     pub selector: Option<String>,
+
+    #[arg(long)]
+    pub force_scrape: bool,
 }

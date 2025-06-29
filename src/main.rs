@@ -12,6 +12,7 @@ use cli_args::CliArgs;
 use data::save_to_json;
 use clap::Parser;
 use anyhow::Result;
+use std::{path::Path};
 use models::ExtractedElement;
 use scraper::{Html, Selector};
 use downloader::{collect_pdf_links, download_pdfs};
@@ -21,10 +22,9 @@ use pdf_parser::parse_and_save;
 #[tokio::main]
 async fn main() -> Result<()> {
     let cfg = load_config("config.toml")?;
-    let json_path = "backup/extracted_elements.json";
-
     let cli_args = CliArgs::parse();
 
+    let json_path = "backup/extracted_elements.json";
 
     let url = cli_args
     .url
@@ -33,57 +33,63 @@ async fn main() -> Result<()> {
     .expect("No URL provided")
     .to_owned();           // owned String
 
-    let timeout = cli_args.timeout.or(cfg.timeout).expect("No timeout provided");
-
-    println!("Target URL: {}", url);
-    println!("Request Timeout: {} seconds", timeout);
-
-    let response = reqwest::get(&url).await?.text().await?;
-    println!("Fetched document from {}", url);
-
-    let document = Html::parse_document(&response);
+    let timeout = cli_args
+    .timeout
+    .or(cfg.timeout)
+    .expect("No timeout provided");
 
     let selector_str = cli_args
     .selector
-    .as_deref()                       // Option<&str>
+    .as_deref()                       
     .or(cfg.selector.as_deref())
     .expect("No selector provided")
-    .to_owned();                      // String if you need ownership
+    .to_owned();                      
 
+    println!("Target URL: {}", url);
+    println!("Request Timeout: {} seconds", timeout);
     println!("Using selector: {}", selector_str);
+    println!("Fetched document from {}", url);
 
-    // Parse the CSS selector
-    let selector = Selector::parse(&selector_str).expect("Invalid CSS selector");
+    if !Path::new(json_path).exists() {
+        println!("⏳ scraping (no cache yet) …");
 
-    let mut extracted_elements: Vec<ExtractedElement> = Vec::new();
+        let response = reqwest::get(&url).await?.text().await?;
+        let document = Html::parse_document(&response);
+        let selector = Selector::parse(&selector_str).expect("Invalid CSS selector");
 
-    for element in document.select(&selector) {
+        let mut extracted_elements: Vec<ExtractedElement> = Vec::new();
 
-        // Get the tag name (e.g., "p", "h1")
-        let tag = element.value().name().to_string();
+        for element in document.select(&selector) {
+            let tag = element.value().name().to_string();
+            let content = element.inner_html();
 
-        // Get the inner HTML content
-        let content = element.inner_html();
+            // Collect attributes
+            let attributes = element
+                .value()
+                .attrs()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect::<HashMap<_, _>>();
 
-        // Collect attributes
-        let attributes = element
-            .value()
-            .attrs()
-            .map(|(key, value)| (key.to_string(), value.to_string()))
-            .collect::<HashMap<_, _>>();
+            extracted_elements.push(ExtractedElement {
+                tag,
+                content,
+                attributes: if attributes.is_empty() {
+                    None
+                } else {
+                    Some(attributes)
+                },
+            });
+        }
 
-        extracted_elements.push(ExtractedElement {
-            tag,
-            content,
-            attributes: if attributes.is_empty() { None } else { Some(attributes) },
-        });
+        // Save scraped data (helper puts it inside backup/)
+        save_to_json(&extracted_elements, "extracted_elements.json")?;
+        println!("Saved {}", json_path);
+    } else {
+        println!("Cached scrape found at {}", json_path);
     }
 
-    // Save scraped data to JSON
-    save_to_json(&extracted_elements, "extracted_elements.json")?;
-
-    let pdf_urls= collect_pdf_links(json_path, &cfg)?;
-    download_pdfs(&pdf_urls, "backup") .await?;   // keep PDFs inside the same folder
+    let pdf_urls = collect_pdf_links(json_path, &cfg)?;
+    download_pdfs(&pdf_urls, "backup").await?; // PDFs go to backup/
 
     parse_and_save("backup", std::path::Path::new("backup/pdf_text.json"))?;
 
